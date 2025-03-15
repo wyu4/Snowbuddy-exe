@@ -3,8 +3,9 @@ numpy
 torch
 scikit-learn
 datasets
-transformers
 gradio
 pydantic
 fastapi
 uvicorn
+transformers[torch]
+transformers
