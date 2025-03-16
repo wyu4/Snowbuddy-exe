@@ -268,7 +268,6 @@ def callLlama(analysis):
         message = f"You are a mean person responing to the text your friend sent to you. Craft a short, upset and snarky reply text to '{analysis['text']}' that is personal while indicating you hate their tone."
 
     # Message payload
-    # if analysis[]
     payload = {
     "messages": [
         {
@@ -287,12 +286,11 @@ def callLlama(analysis):
 
     # Send the request
     response = requests.post(url, headers=headers, data=json.dumps(payload))
-    print("asked llama")
-
     # Parse and return the AI's response
     if response.status_code == 200:
         data = response.json()
         message = data["choices"][0]["message"]["content"]
+        
         return message
     else:
         print("Request failed:", response.status_code)
@@ -307,12 +305,12 @@ async def analyze_endpoint(text: str):
     try:
         # Analyze the text
         analysis = analysis_function(text)
-        llama = callLlama(analysis)
-        print(llama)
+        # llama = callLlama(analysis)
         
         # Format response
         response = AnalysisResponse(
-            response=llama,
+            # response=llama,
+            response = "I hate josh",
             safe_for_snowflake=analysis['combined_safe'],
             offensive=analysis['combined_offensive']
         )
@@ -331,7 +329,7 @@ if __name__ == "__main__":
     # print(_)
     # interface.launch()
     
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
      
      #"http://127.0.0.1:8000/analyze?text=
     
