@@ -5,6 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
         files: ['contentScript.js']
       }, () => {
         chrome.tabs.sendMessage(tabs[0].id, { action: 'getEmailBody' }, (response) => {
+          // Set username from Gmail account button
+          document.getElementById('greeting').textContent = `Dear ${response?.username || 'User'},`;
+  
           if (chrome.runtime.lastError) {
             document.getElementById('responseText').textContent = 'Error: Please refresh Gmail and try again.';
             return;
@@ -35,18 +38,16 @@ document.addEventListener('DOMContentLoaded', () => {
   
     responseElement.textContent = data.response;
     
+    // Correct score handling
     const offensiveScore = data.safe_for_snowflake;
     const percentage = (offensiveScore * 100).toFixed(1);
   
-    // Set status text and color
     statusText.textContent = 'Offensive';
     statusText.style.color = '#f44336';
     
-    // Set percentage text
     percentageText.textContent = `${percentage}%`;
     percentageText.style.color = '#f44336';
   
-    // Set progress bar
     progressBar.style.width = `${percentage}%`;
     progressBar.style.backgroundColor = '#f44336';
   }

@@ -13,10 +13,25 @@
         margin: 0 0 15px 0;
         text-align: center;
       }
-      #responseText {
+      .email-container {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+      }
+      .email-header {
         margin-bottom: 10px;
+      }
+      .email-content {
         white-space: pre-wrap;
         font-size: 14px;
+        line-height: 1.5;
+        margin: 10px 0;
+      }
+      .email-signature {
+        margin-top: 20px;
+        border-top: 1px solid #ddd;
+        padding-top: 10px;
       }
       .status-container {
         margin: 10px 0;
@@ -43,7 +58,18 @@
   </head>
   <body>
     <h1>Snowflake Preventive</h1>
-    <div id="responseText">Analyzing...</div>
+    <div class="email-container">
+      <div class="email-header">
+        <div id="greeting">Dear User,</div>
+      </div>
+      <div class="email-content">
+        <div id="responseText">Analyzing your email content...</div>
+      </div>
+      <div class="email-signature">
+        <div>Sincerely,</div>
+        <div>Snowflake Detector</div>
+      </div>
+    </div>
     <div class="status-container">
       <div id="statusText" class="status-text"></div>
       <div id="percentageText" class="status-text"></div>
