@@ -35,21 +35,18 @@ document.addEventListener('DOMContentLoaded', () => {
   
     responseElement.textContent = data.response;
     
-    const safeScore = data.safe_for_snowflake;
-    const offensiveScore = data.offensive;
-    const isSafe = safeScore > offensiveScore;
-    const progressValue = isSafe ? safeScore : offensiveScore;
-    const percentage = (progressValue * 100).toFixed(1);
+    const offensiveScore = data.safe_for_snowflake;
+    const percentage = (offensiveScore * 100).toFixed(1);
   
     // Set status text and color
-    statusText.textContent = isSafe ? 'Safe for Snowflake' : 'Offensive';
-    statusText.style.color = isSafe ? '#4CAF50' : '#f44336';
+    statusText.textContent = 'Offensive';
+    statusText.style.color = '#f44336';
     
     // Set percentage text
     percentageText.textContent = `${percentage}%`;
-    percentageText.style.color = isSafe ? '#4CAF50' : '#f44336';
+    percentageText.style.color = '#f44336';
   
     // Set progress bar
     progressBar.style.width = `${percentage}%`;
-    progressBar.style.backgroundColor = isSafe ? '#4CAF50' : '#f44336';
+    progressBar.style.backgroundColor = '#f44336';
   }
