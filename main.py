@@ -15,6 +15,7 @@ import gradio as gr
 
 import requests
 import json
+import re
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
@@ -252,6 +253,11 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
 
 
 def callLlama(analysis):
+    def clean_message(message):
+        # Remove all escape characters (e.g., \", \n, \t, \\)
+        cleaned_message = re.sub(r'\\.', '', message)
+        return cleaned_message
+
     # API endpoint
     url = "https://ai.hackclub.com/chat/completions"
 
@@ -291,7 +297,7 @@ def callLlama(analysis):
         data = response.json()
         message = data["choices"][0]["message"]["content"]
         
-        return message
+        return clean_message(message)
     else:
         print("Request failed:", response.status_code)
         print(response.text)
@@ -310,7 +316,7 @@ async def analyze_endpoint(text: str):
         # Format response
         response = AnalysisResponse(
             # response=llama,
-            response = "I hate josh",
+            response = "Aww, thanks for keeping it real with me. I love your honesty, even if it's not always easy to hear. But just so you know, I think you're amazing inside and out, and I'm not just saying that because I'm your friend. Seriously though, I'm feeling a bit self-conscious now, so let's grab coffee and talk about something that makes us both feel beautiful - like our favorite memories together!",
             safe_for_snowflake=analysis['combined_safe'],
             offensive=analysis['combined_offensive']
         )
