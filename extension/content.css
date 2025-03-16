@@ -1,117 +1,165 @@
+/* Modern CSS Enhancements */
 #snowflake-window {
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 300px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    width: 350px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     z-index: 10000;
-    font-family: Arial, sans-serif; /* Add base font here */
-}
-
-#titlebar {
-    background: #1a73e8;
-    color: white;
-    padding: 10px;
-    border-radius: 8px 8px 0 0;
-    cursor: move;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none; /* Prevent text selection */
-}
-
-.controls button {
-    background: none;
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 0 5px;
-    font-size: 16px;
-}
-
-/* Remove the nested #content block and flatten the structure */
-#snowflake-window .email-container {
-    background: #f5f5f5;
-    padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-}
-
-#snowflake-window h1 {
-    color: #1a73e8;
-    font-size: 18px;
-    margin: 0 0 15px 0;
-    text-align: center;
-}
-
-#snowflake-window .email-header {
-    font-size: 12px;
-    margin-bottom: 2px;
-}
-
-#snowflake-window .email-content {
-    font-size: 12px;
-    line-height: 1.5;
-    margin-top: 5px;
-}
-
-#snowflake-window .email-signature {
-    margin-top: 20px;
-    border-top: 1px solid #ddd;
-    padding-top: 10px;
-    font-size: 12px;
-}
-
-#snowflake-window .status-container {
-    margin: 10px 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-#snowflake-window .progress-container {
-    width: 100%;
-    height: 20px;
-    background-color: #e0e0e0;
-    border-radius: 10px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
     overflow: hidden;
 }
 
-#snowflake-window .progress-bar {
-    height: 100%;
-    transition: width 0.3s ease;
+#titlebar {
+    background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-#snowflake-window .status-text {
-    font-weight: bold;
-    font-size: 16px;
+.title {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-/* Add content area styling */
-#snowflake-window .window-content {
-    padding: 15px;
-    max-height: 80vh; /* Add scroll if content overflows */
+.window-controls {
+    display: flex;
+    gap: 6px;
+}
+
+.window-control {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    padding: 0;
+}
+
+.window-control:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.window-control.close:hover {
+    background: #d32f2f;
+    color: white;
+}
+
+.window-content {
+    padding: 20px;
+    max-height: 70vh;
     overflow-y: auto;
 }
 
-.header-container {
+.content-header h1 {
+    color: #1a73e8;
+    font-size: 20px;
+    margin: 0 0 20px 0;
+    text-align: center;
+    font-weight: 600;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.email-container {
+    background: #f8f9ff;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #e3e8ff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+.email-header #greeting {
+    font-size: 14px;
+    color: #2d3748;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.email-content {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #4a5568;
+    background: white;
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.email-signature {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 13px;
+    color: #718096;
+}
+
+.signature-name {
+    color: #1a73e8;
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+.analysis-results {
+    background: #f8f9ff;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e3e8ff;
+}
+
+.status-container {
+    margin: 12px 0;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start; /* Align items to the top */
-    margin-bottom: 15px; /* Adjust as needed */
-  }
-  
-  .header-container h1 {
-    margin: 0; /* Remove default margin */
-    color: #1a73e8;
-    font-size: 18px;
-  }
-  
-  .header-container h4 {
-    margin: 0; /* Remove default margin */
-    color: #1a73e8;
+    align-items: center;
+}
+
+.status-text {
+    font-weight: 600;
     font-size: 14px;
-  }
-  
+    color: #2d3748;
+}
+
+#percentageText {
+    color: #1a73e8;
+}
+
+.progress-container {
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #1a73e8 0%, #0d47a1 100%);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 8px;
+}
+
+/* Hover animations */
+button {
+    transition: transform 0.1s ease;
+}
+
+button:active {
+    transform: scale(0.95);
+}
