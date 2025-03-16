@@ -9,4 +9,4 @@ fastapi
 uvicorn
 transformers[torch]
 transformers
-openai
+python-dotenv
