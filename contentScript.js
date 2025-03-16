@@ -18,6 +18,7 @@ function createSnowflakeWindow() {
   const windowHTML = `
     <div id="snowflake-window">
       <div id="titlebar">
+        <span>Snowflake Preventive</span>
         <div class="window-controls">
           <button class="window-control minimize">−</button>
           <button class="window-control maximize">□</button>
@@ -25,7 +26,7 @@ function createSnowflakeWindow() {
         </div>
       </div>
       <div class="window-content">
-        <h1>Snowflake Preventive</h1>
+        <h1>Sample Response</h1>
         <div class="email-container">
           <div class="email-header">
             <div id="greeting">Dear User,</div>
@@ -165,6 +166,7 @@ let lastEmailBody = '';
 let lastUsername = '';
 let lastResponse = '';
 
+// Modified loadContent function
 // Modified loadContent function
 function loadContent() {
   if (isUpdating) return;

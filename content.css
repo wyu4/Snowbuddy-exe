@@ -95,3 +95,23 @@
     max-height: 80vh; /* Add scroll if content overflows */
     overflow-y: auto;
 }
+
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Align items to the top */
+    margin-bottom: 15px; /* Adjust as needed */
+  }
+  
+  .header-container h1 {
+    margin: 0; /* Remove default margin */
+    color: #1a73e8;
+    font-size: 18px;
+  }
+  
+  .header-container h4 {
+    margin: 0; /* Remove default margin */
+    color: #1a73e8;
+    font-size: 14px;
+  }
+  
