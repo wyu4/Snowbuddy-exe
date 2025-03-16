@@ -250,21 +250,35 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
     )
     return interface, analyze_text  # Return both interface and analysis function
 
-def isOffensive(offensive: float, snowflake: float):
-    if snowflake > offensive:
-        return "not offensive"
-    return "offensive"
 
 def callLlama(analysis):
     # API endpoint
     url = "https://ai.hackclub.com/chat/completions"
 
+    isOffensive = analysis['combined_safe'] < analysis['combined_offensive']
+    message = ""
+
+    #User is offensive
+    if isOffensive:
+        #message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
+        message = f"You are a nice person responing to the text your friend sent to you. Craft a short, suportive and caring reply text to '{analysis['text']}' that is personal while indicating you like their tone."
+    #User is kind
+    else: 
+        #message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their response. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
+        message = f"You are a mean person responing to the text your friend sent to you. Craft a short, upset and snarky reply text to '{analysis['text']}' that is personal while indicating you hate their tone."
+
     # Message payload
+    # if analysis[]
     payload = {
-        "messages": [
-            {"role": "user", "content": f"You are to provide a visceral response to {analysis['text']} if you know that the message is considered {isOffensive(analysis['combined_offensive'], analysis['combined_safe'])}"}
+    "messages": [
+        {
+            "role": "user", 
+            "content": message
+        }
         ]
     }
+
+
 
     # Headers
     headers = {
