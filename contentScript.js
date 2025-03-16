@@ -7,6 +7,7 @@ let isDragging = false;
 let offset = [0, 0];
 let isMaximized = false;
 let isMinimized = false;
+let snowflakeInitialized = false;
 
 var timerUpdate = 500;
 
@@ -78,6 +79,29 @@ function stopAutoUpdate() {
     updateInterval = null;
   }
 }
+
+function tryCreateSnowflakeWindow() {
+  // Only run once
+  if (snowflakeInitialized || document.getElementById('snowflake-window')) return;
+
+
+  // Check that Gmail's UI has loaded
+  const gmailReady = document.querySelector('div[role="main"]');
+  if (gmailReady) {
+    createSnowflakeWindow();
+    snowflakeInitialized = true;
+  }
+}
+
+
+// Periodically check if Gmail is ready (SPA-compatible)
+const gmailInitInterval = setInterval(() => {
+  tryCreateSnowflakeWindow();
+
+
+  // Optionally stop checking once initialized
+  if (snowflakeInitialized) clearInterval(gmailInitInterval);
+}, 1000);
 
 
 function addWindowControls() {
@@ -225,8 +249,21 @@ function getEmailBody() {
 
 
 
+function getColorFromPercentage(percentage) {
+  const green = [154, 230, 0]; // RGB for #9ae600 (green)
+  const red = [244, 67, 54];   // RGB for #f44336 (red)
+
+  // Calculate the interpolated RGB values for green to red transition
+  const r = Math.round(green[0] + (percentage / 100) * (red[0] - green[0]));
+  const g = Math.round(green[1] + (percentage / 100) * (red[1] - green[1]));
+  const b = Math.round(green[2] + (percentage / 100) * (red[2] - green[2]));
+
+  // Return the final color in RGB format
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+
 function displayResults(data) {
-  console.log(data);
   const responseElement = document.getElementById('responseText');
   const progressBar = document.getElementById('progressBar');
   const statusText = document.getElementById('statusText');
@@ -237,11 +274,12 @@ function displayResults(data) {
   const percentage = (offensiveScore * 100).toFixed(1);
 
   statusText.textContent = 'Offensive';
-  statusText.style.color = '#f44336';
+  const color = getColorFromPercentage(percentage);
+  statusText.style.color = color;
   percentageText.textContent = `${percentage}%`;
-  percentageText.style.color = '#f44336';
+  percentageText.style.color = color;
   progressBar.style.width = `${percentage}%`;
-  progressBar.style.backgroundColor = '#f44336';
+  progressBar.style.backgroundColor = color;
 }
 
 // Original content script functions
