@@ -66,26 +66,15 @@ function createSnowflakeWindow() {
 }
 
 function startAutoUpdate() {
-  stopAutoUpdate();
-  let lastUpdate = 0;
-
-  const updateLoop = (timestamp) => {
-    if (!snowflakeWindow || timestamp - lastUpdate < timerUpdate) {
-      updateInterval = requestAnimationFrame(updateLoop);
-      return;
-    }
-    
-    lastUpdate = timestamp;
+  stopAutoUpdate(); // Clear any existing interval
+  updateInterval = setInterval(() => {
     if (!isUpdating) loadContent();
-    updateInterval = requestAnimationFrame(updateLoop);
-  };
-
-  updateInterval = requestAnimationFrame(updateLoop);
+  }, timerUpdate); // Update every 500ms (or your desired interval)
 }
 
 function stopAutoUpdate() {
   if (updateInterval) {
-    cancelAnimationFrame(updateInterval);
+    clearInterval(updateInterval);
     updateInterval = null;
   }
 }
@@ -162,6 +151,9 @@ function loadContent() {
   const currentBody = emailData.emailBody.trim();
   const currentUser = emailData.username;
 
+  console.log('Last Email Body:', lastEmailBody); // Log the last email body
+  console.log('Current Email Body:', currentBody); // Log the current email body
+
   // Update username if changed
   if (currentUser !== lastUsername) {
     document.getElementById('greeting').textContent = `Dear ${currentUser || 'User'},`;
@@ -170,6 +162,7 @@ function loadContent() {
 
   // Only proceed if email content has changed
   if (currentBody === lastEmailBody && currentBody !== '') {
+    console.log('Email content has not changed.'); // Log if content hasn't changed
     isUpdating = false;
     return;
   }
@@ -196,23 +189,39 @@ function loadContent() {
       isUpdating = false;
     })
     .catch((error) => {
+      console.error('Fetch Error:', error); // Log fetch errors
       document.getElementById('responseText').textContent = 'API Error: ' + error.message;
       isUpdating = false;
     });
 }
 
-// Modified getEmailBody function to get fresh content
+
+
 function getEmailBody() {
-  // Use more specific selectors for Gmail's compose/view modes
-  const composeBody = document.querySelector('[aria-label="Message Body"]');
-  const viewBody = document.querySelector('.ii.gt');
-  const currentBody = (composeBody || viewBody)?.innerText?.trim() || '';
-  
+  const composeBody = document.querySelector('div[role="textbox"]');
+  const viewBody = document.querySelector('div[role="article"]');
+  const currentBody = (composeBody || viewBody)?.innerText || '';
+
+  console.log('Email Body:', currentBody); // Log the detected email body
   return {
     emailBody: currentBody,
     username: getUsername()
   };
 }
+
+// function getEmailBody() {
+//   // Compose mode
+//   const composeBody = document.querySelector('[aria-label="Message Body"]');
+//   // View mode
+//   const viewBody = document.querySelector('.ii.gt') || document.querySelector('.a3s.aiL');
+
+//   const currentBody = (composeBody || viewBody)?.innerText?.trim() || '';
+//   console.log('Email Body:', currentBody); // Log the detected email body
+//   return {
+//     emailBody: currentBody,
+//     username: getUsername()
+//   };
+// }
 
 
 
@@ -244,14 +253,7 @@ function getUsername() {
   return match && match[1] ? match[1].trim().split(' ')[0] : 'User';
 }
 
-// function getEmailBody() {
-//   const composeBody = document.querySelector('div[role="textbox"]');
-//   const viewBody = document.querySelector('div[role="article"]');
-//   return {
-//     emailBody: (composeBody || viewBody)?.innerText || '',
-//     username: getUsername()
-//   };
-// }
+
 
 // Toggle window visibility
 chrome.runtime.onMessage.addListener((request) => {
