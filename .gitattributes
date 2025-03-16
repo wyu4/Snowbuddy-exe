@@ -1,5 +1,4 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
 data/* filter=lfs diff=lfs merge=lfs -text
-snowflake_classifier/* filter=lfs diff=lfs merge=lfs -text
 snowflake_classifier/model.safetensors filter=lfs diff=lfs merge=lfs -text
