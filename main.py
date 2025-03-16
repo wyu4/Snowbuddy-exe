@@ -287,15 +287,15 @@ def callGBT(analysis):
     isOffensive = analysis['combined_safe'] < analysis['combined_offensive']
     message = ""
 
-    #User is offensive
     if isOffensive:
         # message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
-        message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
-
+        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
+        message = f"I’m going to give you the content of an email I’m about to send to my friend. Please pretend to be my friend and write the most likely response they would send back, in the same tone they normally use when replying to me. Assume there is no conflict and that we have a good relationship."
     #User is kind
-    else: 
-        #message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
-        message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
+    else:
+        # message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
+        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
+        message = f"I’m going to give you the content of an email I’m about to send to my friend. The message is intentionally sarcastic, harsh, or possibly offensive. I want you to respond as if you were my friend reacting honestly and naturally to the message—whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. Be realistic and write their most likely response based on how a normal person would react in a close but strained friendship."
 
     # Message payload
     payload = {
