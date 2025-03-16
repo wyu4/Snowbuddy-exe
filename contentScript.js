@@ -7,6 +7,7 @@ let isDragging = false;
 let offset = [0, 0];
 let isMaximized = false;
 let isMinimized = false;
+let snowflakeInitialized = false;
 
 var timerUpdate = 500;
 
@@ -65,10 +66,30 @@ function createSnowflakeWindow() {
   startAutoUpdate();
 }
 
+function tryCreateSnowflakeWindow() {
+  // Only run once
+  if (snowflakeInitialized || document.getElementById('snowflake-window')) return;
+
+  // Check that Gmail's UI has loaded
+  const gmailReady = document.querySelector('div[role="main"]');
+  if (gmailReady) {
+    createSnowflakeWindow();
+    snowflakeInitialized = true;
+  }
+}
+
+// Periodically check if Gmail is ready (SPA-compatible)
+const gmailInitInterval = setInterval(() => {
+  tryCreateSnowflakeWindow();
+
+  // Optionally stop checking once initialized
+  if (snowflakeInitialized) clearInterval(gmailInitInterval);
+}, 1000);
+
 function startAutoUpdate() {
   stopAutoUpdate();
   let lastUpdate = 0;
-
+  
   const updateLoop = (timestamp) => {
     if (!snowflakeWindow || timestamp - lastUpdate < timerUpdate) {
       updateInterval = requestAnimationFrame(updateLoop);
