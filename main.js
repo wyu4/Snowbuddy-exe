@@ -21,4 +21,15 @@ function fetchDataFromApi(text) {
   }
   
 
-console.log(fetchDataFromApi("kill yourself")); 
+  async function logApiResponse() {
+    try {
+      const data = await fetchDataFromApi("kill yourself");
+      console.log(data.safe_for_snowflake);
+      console.log(data.offensive);
+    } catch (error) {
+      console.error('There was an error:', error);
+    }
+  }
+  
+  logApiResponse();
+  

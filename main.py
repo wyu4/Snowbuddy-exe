@@ -13,6 +13,9 @@ from transformers import (
 )
 import gradio as gr
 
+import requests
+import json
+
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 import uvicorn
@@ -20,6 +23,7 @@ import uvicorn
 app = FastAPI()
 
 class AnalysisResponse(BaseModel):
+    response: str
     safe_for_snowflake: float
     offensive: float
 
@@ -183,6 +187,7 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
         "zero-shot-classification",
         model="facebook/bart-large-mnli"
     )
+
     
     def analyze_text(text):
         """Core analysis function usable by both API and Gradio"""
@@ -216,6 +221,10 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
             "combined_safe": 1 - combined_offensive
         }
     
+
+
+
+    
     def gradio_predict(text):
         """Wrapper for Gradio interface"""
         analysis = analyze_text(text)
@@ -241,6 +250,40 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
     )
     return interface, analyze_text  # Return both interface and analysis function
 
+def isOffensive(offensive: float, snowflake: float):
+    if snowflake > offensive:
+        return "not offensive"
+    return "offensive"
+
+def callLlama(analysis):
+    # API endpoint
+    url = "https://ai.hackclub.com/chat/completions"
+
+    # Message payload
+    payload = {
+        "messages": [
+            {"role": "user", "content": f"You are to provide a visceral response to {analysis['text']} if you know that the message is considered {isOffensive(analysis['combined_offensive'], analysis['combined_safe'])}"}
+        ]
+    }
+
+    # Headers
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    # Send the request
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    print("asked llama")
+
+    # Parse and return the AI's response
+    if response.status_code == 200:
+        data = response.json()
+        message = data["choices"][0]["message"]["content"]
+        return message
+    else:
+        print("Request failed:", response.status_code)
+        print(response.text)
+
 
 # get analysis function
 _, analysis_function = create_gradio_interface()
@@ -250,25 +293,31 @@ async def analyze_endpoint(text: str):
     try:
         # Analyze the text
         analysis = analysis_function(text)
+        llama = callLlama(analysis)
+        print(llama)
         
         # Format response
         response = AnalysisResponse(
-            text=text,
+            response=llama,
             safe_for_snowflake=analysis['combined_safe'],
             offensive=analysis['combined_offensive']
         )
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     
 
 # --------------------
 # Main Execution
 # --------------------
 if __name__ == "__main__":
+     
+    # interface, _ = create_gradio_interface()
+    # print(_)
+    # interface.launch()
     
-     uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
      
      #"http://127.0.0.1:8000/analyze?text=
     

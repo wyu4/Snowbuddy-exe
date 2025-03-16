@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Gmail Analyzer",
+  "description": "Analyze and highlight offensive sentences in Gmail",
+  "version": "1.0",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/mail/u/0/#inbox*"],
+      "js": ["content.js"]
+    }
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
