@@ -18,7 +18,6 @@ function createSnowflakeWindow() {
   const windowHTML = `
     <div id="snowflake-window">
       <div id="titlebar">
-        <span>Snowflake Preventive</span>
         <div class="window-controls">
           <button class="window-control minimize">−</button>
           <button class="window-control maximize">□</button>
@@ -194,6 +193,12 @@ function loadContent() {
   // Handle empty content
   if (!currentBody) {
     document.getElementById('responseText').textContent = 'No email content found.';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressBar').style.backgroundColor = getColorFromPercentage(0);
+    document.getElementById('statusText').textContent = 'Offensive';
+    document.getElementById('statusText').style.color = getColorFromPercentage(0);
+    document.getElementById('percentageText').textContent = '0%';
+    document.getElementById('percentageText').style.color = getColorFromPercentage(0);
     lastEmailBody = '';
     isUpdating = false;
     return;
