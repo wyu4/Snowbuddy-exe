@@ -66,15 +66,26 @@ function createSnowflakeWindow() {
 }
 
 function startAutoUpdate() {
-  stopAutoUpdate(); // Clear any existing interval
-  updateInterval = setInterval(() => {
+  stopAutoUpdate();
+  let lastUpdate = 0;
+
+  const updateLoop = (timestamp) => {
+    if (!snowflakeWindow || timestamp - lastUpdate < timerUpdate) {
+      updateInterval = requestAnimationFrame(updateLoop);
+      return;
+    }
+    
+    lastUpdate = timestamp;
     if (!isUpdating) loadContent();
-  }, timerUpdate);
+    updateInterval = requestAnimationFrame(updateLoop);
+  };
+
+  updateInterval = requestAnimationFrame(updateLoop);
 }
 
 function stopAutoUpdate() {
   if (updateInterval) {
-    clearInterval(updateInterval);
+    cancelAnimationFrame(updateInterval);
     updateInterval = null;
   }
 }
@@ -137,29 +148,70 @@ function setupDragging() {
   });
 }
 
-function loadContent() {
+// Add these variables at the top with other declarations
+let lastEmailBody = '';
+let lastUsername = '';
+let lastResponse = '';
 
+// Modified loadContent function
+function loadContent() {
   if (isUpdating) return;
   isUpdating = true;
 
   const emailData = getEmailBody();
-  document.getElementById('greeting').textContent = `Dear ${emailData.username || 'User'},`;
+  const currentBody = emailData.emailBody.trim();
+  const currentUser = emailData.username;
 
-  if (!emailData.emailBody.trim()) {
-    document.getElementById('responseText').textContent = 'No email content found.';
+  // Update username if changed
+  if (currentUser !== lastUsername) {
+    document.getElementById('greeting').textContent = `Dear ${currentUser || 'User'},`;
+    lastUsername = currentUser;
+  }
+
+  // Only proceed if email content has changed
+  if (currentBody === lastEmailBody && currentBody !== '') {
+    isUpdating = false;
     return;
   }
-  
-  fetch(`http://127.0.0.1:8000/analyze?text=${encodeURIComponent(emailData.emailBody)}`)
+
+  // Handle empty content
+  if (!currentBody) {
+    document.getElementById('responseText').textContent = 'No email content found.';
+    lastEmailBody = '';
+    isUpdating = false;
+    return;
+  }
+
+  // Add cache busting to prevent browser caching
+  const cacheBuster = Date.now();
+  fetch(`http://127.0.0.1:8000/analyze?text=${encodeURIComponent(currentBody)}&_=${cacheBuster}`)
     .then((res) => res.json())
-    .then((data) =>{
-      displayResults(data);
+    .then((data) => {
+      // Only update if response is different
+      if (JSON.stringify(data) !== lastResponse) {
+        displayResults(data);
+        lastResponse = JSON.stringify(data);
+      }
+      lastEmailBody = currentBody;
       isUpdating = false;
-    } )
+    })
     .catch((error) => {
       document.getElementById('responseText').textContent = 'API Error: ' + error.message;
       isUpdating = false;
     });
+}
+
+// Modified getEmailBody function to get fresh content
+function getEmailBody() {
+  // Use more specific selectors for Gmail's compose/view modes
+  const composeBody = document.querySelector('[aria-label="Message Body"]');
+  const viewBody = document.querySelector('.ii.gt');
+  const currentBody = (composeBody || viewBody)?.innerText?.trim() || '';
+  
+  return {
+    emailBody: currentBody,
+    username: getUsername()
+  };
 }
 
 
@@ -192,14 +244,14 @@ function getUsername() {
   return match && match[1] ? match[1].trim().split(' ')[0] : 'User';
 }
 
-function getEmailBody() {
-  const composeBody = document.querySelector('div[role="textbox"]');
-  const viewBody = document.querySelector('div[role="article"]');
-  return {
-    emailBody: (composeBody || viewBody)?.innerText || '',
-    username: getUsername()
-  };
-}
+// function getEmailBody() {
+//   const composeBody = document.querySelector('div[role="textbox"]');
+//   const viewBody = document.querySelector('div[role="article"]');
+//   return {
+//     emailBody: (composeBody || viewBody)?.innerText || '',
+//     username: getUsername()
+//   };
+// }
 
 // Toggle window visibility
 chrome.runtime.onMessage.addListener((request) => {
