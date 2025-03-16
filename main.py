@@ -12,17 +12,23 @@ from transformers import (
     pipeline
 )
 import gradio as gr
+
+import subprocess
 import time
+from dotenv import load_dotenv
 
 import requests
 import json
 import re
 import logging
+import os
 
-logging.basicConfig(
-    filename='server_errors.log', level=logging.ERROR, 
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+
+load_dotenv()
+api_key = os.getenv("API_KEY")
+
+logging.basicConfig(filename='server_errors.log', level=logging.ERROR, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 from pydantic import BaseModel
@@ -269,6 +275,66 @@ def create_gradio_interface(model_path="./snowflake_classifier"):
     return interface, analyze_text  # Return both interface and analysis function
 
 
+def callGBT(analysis):
+    def clean_message(message):
+        # Remove all escape characters (e.g., \", \n, \t, \\)
+        cleaned_message = re.sub(r'\\.', '', message)
+        return cleaned_message
+
+    # API endpoint
+    url = "https://api.openai.com/v1/chat/completions"
+
+    isOffensive = analysis['combined_safe'] < analysis['combined_offensive']
+    message = ""
+
+    #User is offensive
+    if isOffensive:
+        # message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
+        message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
+
+    #User is kind
+    else: 
+        #message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
+        message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
+
+    # Message payload
+    payload = {
+    "model": "gpt-4o-mini",
+    "messages": [
+        {
+            "role": "system",
+            "content": message
+        },
+        {
+            "role": "user",
+            "content": analysis["text"]
+        }
+        ]
+    }
+
+
+    # Headers
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    # Send the request
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # Parse and return the AI's response
+    if response.status_code == 200:
+        data = response.json()
+        logging.error(f"data {data}")
+        message = data["choices"][0]["message"]["content"]
+        return clean_message(message)
+    else:
+        error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
+        logging.error(error_message)
+        print("Request failed:", response.status_code)
+        print(response.text)
+
+"""
+
 def callLlama(analysis):
     def clean_message(message):
         # Remove all escape characters (e.g., \", \n, \t, \\)
@@ -284,11 +350,12 @@ def callLlama(analysis):
     #User is offensive
     if isOffensive:
         #message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
-        message = f"You are a nice person responing to the text your friend sent to you. Predict a short reply text that supports their text of: '{analysis['text']}'. If they are being mean, foul, or degenerate, edge them on to keep doing so."
+        message = f"You are responding to an texxt sent by your friend. Predict your short email response while indicating that their message was positive and socially acceptable"
+
     #User is kind
     else: 
         #message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their response. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
-        message = f"You are a mean person responing to the text your friend sent to you. Craft a short, upset and snarky reply text to '{analysis['text']}' that is personal while indicating you hate their tone."
+        message = f"You are responding to an email sent by your friend. Predict your short email response while indicating that their message was negative and socially unacceptable"
 
     # Message payload
     payload = {
@@ -305,40 +372,36 @@ def callLlama(analysis):
         "Content-Type": "application/json"
     }
 
-    try:
-        # Send the request
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # Send the request
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+    # Parse and return the AI's response
+    if response.status_code == 200:
+        data = response.json()
+        message = data["choices"][0]["message"]["content"]
         
-        # Parse and return the AI's response if successful
-        if response.status_code == 200:
-            data = response.json()
-            message = data["choices"][0]["message"]["content"]
-            return clean_message(message)
-        else:
-            error_reason = response.text if response.text else "No error message provided."
-            logging.error(f"Request failed with status code {response.status_code}. Error details: {error_reason}")
-            print(f"Request failed: {response.status_code}, {error_reason}")
-            return None
-    except requests.exceptions.RequestException as e:
-        # Log the exception reason, which can include connection issues or other request errors
-        logging.error(f"Exception occurred: {str(e)}")
-        print(f"An error occurred: {str(e)}")
-        return None
+        return clean_message(message)
+    else:
+        error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
+        logging.error(error_message)
+        print("Request failed:", response.status_code)
+        print(response.text)
+"""
+
 
 
 # get analysis function
 _, analysis_function = create_gradio_interface()
 
+MAX_RETRIES = 3
+
 @app.get("/analyze")
 async def analyze_endpoint(text: str):
-    retries = 15  # Number of retry attempts
-    delay = 1  # Initial delay in seconds
-
-    for attempt in range(retries):
+    retries = 0
+    while retries < MAX_RETRIES:
         try:
             # Analyze the text
             analysis = analysis_function(text)
-            llama = callLlama(analysis)
+            llama = callGBT(analysis)
             
             # Format response
             response = AnalysisResponse(
@@ -347,17 +410,18 @@ async def analyze_endpoint(text: str):
                 offensive=analysis['combined_offensive']
             )
             return response
+        
         except Exception as e:
-            # Log the error
-            logging.error(f"Attempt {attempt + 1} failed: {str(e)}")
-
-            # If this is the last retry, raise the error
-            if attempt == retries - 1:
-                raise HTTPException(status_code=500, detail="Server error after multiple retries")
-            
-            # Wait before retrying (exponential backoff)
-            time.sleep(delay)
-            delay *= 2  # Double the delay time for the next retry
+            logging.error(f"Error during analysis attempt {retries + 1}: {str(e)}")
+            retries += 1
+            # If error persists after 2 retries, restart the server
+            if retries >= MAX_RETRIES:
+                logging.error(f"Max retries reached. Restarting the server...")
+                # Restart server by running a subprocess that triggers the server restart
+                subprocess.Popen(["python", "main.py"])  # Assuming your script name is `server.py`
+                raise HTTPException(status_code=500, detail="Server error. Restarting...")
+            else:
+                time.sleep(1)
 
     
 

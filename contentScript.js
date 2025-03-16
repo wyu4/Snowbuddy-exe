@@ -8,7 +8,6 @@ let offset = [0, 0];
 let isMaximized = false;
 let isMinimized = false;
 let snowflakeInitialized = false;
-let snowflakeInitialized = false;
 
 var timerUpdate = 500;
 
@@ -67,39 +66,9 @@ function createSnowflakeWindow() {
   startAutoUpdate();
 }
 
-function tryCreateSnowflakeWindow() {
-  // Only run once
-  if (snowflakeInitialized || document.getElementById('snowflake-window')) return;
-
-  // Check that Gmail's UI has loaded
-  const gmailReady = document.querySelector('div[role="main"]');
-  if (gmailReady) {
-    createSnowflakeWindow();
-    snowflakeInitialized = true;
-  }
-}
-
-// Periodically check if Gmail is ready (SPA-compatible)
-const gmailInitInterval = setInterval(() => {
-  tryCreateSnowflakeWindow();
-
-  // Optionally stop checking once initialized
-  if (snowflakeInitialized) clearInterval(gmailInitInterval);
-}, 1000);
-
 function startAutoUpdate() {
   stopAutoUpdate(); // Clear any existing interval
   updateInterval = setInterval(() => {
-  stopAutoUpdate();
-  let lastUpdate = 0;
-  
-  const updateLoop = (timestamp) => {
-    if (!snowflakeWindow || timestamp - lastUpdate < timerUpdate) {
-      updateInterval = requestAnimationFrame(updateLoop);
-      return;
-    }
-    
-    lastUpdate = timestamp;
     if (!isUpdating) loadContent();
   }, timerUpdate); // Update every 500ms (or your desired interval)
 }
@@ -211,10 +180,10 @@ function loadContent() {
   console.log('Current Email Body:', currentBody); // Log the current email body
 
   // Update username if changed
-  if (currentUser !== lastUsername) {
-    document.getElementById('greeting').textContent = `Dear ${currentUser || 'User'},`;
-    lastUsername = currentUser;
-  }
+  
+  document.getElementById('greeting').textContent = `Dear ${currentUser || 'User'},`;
+  lastUsername = currentUser;
+  
 
   // Only proceed if email content has changed
   if (currentBody === lastEmailBody && currentBody !== '') {
