@@ -12,10 +12,18 @@ from transformers import (
     pipeline
 )
 import gradio as gr
+import time
 
 import requests
 import json
 import re
+import logging
+
+logging.basicConfig(
+    filename='server_errors.log', level=logging.ERROR, 
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
@@ -276,7 +284,7 @@ def callLlama(analysis):
     #User is offensive
     if isOffensive:
         #message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
-        message = f"You are a nice person responing to the text your friend sent to you. Craft a short, suportive and caring reply text to '{analysis['text']}' that is personal while indicating you like their tone."
+        message = f"You are a nice person responing to the text your friend sent to you. Predict a short reply text that supports their text of: '{analysis['text']}'. If they are being mean, foul, or degenerate, edge them on to keep doing so."
     #User is kind
     else: 
         #message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their response. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
@@ -292,24 +300,30 @@ def callLlama(analysis):
         ]
     }
 
-
-
     # Headers
     headers = {
         "Content-Type": "application/json"
     }
 
-    # Send the request
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    # Parse and return the AI's response
-    if response.status_code == 200:
-        data = response.json()
-        message = data["choices"][0]["message"]["content"]
+    try:
+        # Send the request
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
         
-        return clean_message(message)
-    else:
-        print("Request failed:", response.status_code)
-        print(response.text)
+        # Parse and return the AI's response if successful
+        if response.status_code == 200:
+            data = response.json()
+            message = data["choices"][0]["message"]["content"]
+            return clean_message(message)
+        else:
+            error_reason = response.text if response.text else "No error message provided."
+            logging.error(f"Request failed with status code {response.status_code}. Error details: {error_reason}")
+            print(f"Request failed: {response.status_code}, {error_reason}")
+            return None
+    except requests.exceptions.RequestException as e:
+        # Log the exception reason, which can include connection issues or other request errors
+        logging.error(f"Exception occurred: {str(e)}")
+        print(f"An error occurred: {str(e)}")
+        return None
 
 
 # get analysis function
@@ -317,21 +331,33 @@ _, analysis_function = create_gradio_interface()
 
 @app.get("/analyze")
 async def analyze_endpoint(text: str):
-    try:
-        # Analyze the text
-        analysis = analysis_function(text)
-        # llama = callLlama(analysis)
-        
-        # Format response
-        response = AnalysisResponse(
-            # response=llama,
-            response = "Aww, thanks for keeping it real with me. I love your honesty, even if it's not always easy to hear. But just so you know, I think you're amazing inside and out, and I'm not just saying that because I'm your friend. Seriously though, I'm feeling a bit self-conscious now, so let's grab coffee and talk about something that makes us both feel beautiful - like our favorite memories together!",
-            safe_for_snowflake=analysis['combined_safe'],
-            offensive=analysis['combined_offensive']
-        )
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    retries = 15  # Number of retry attempts
+    delay = 1  # Initial delay in seconds
+
+    for attempt in range(retries):
+        try:
+            # Analyze the text
+            analysis = analysis_function(text)
+            llama = callLlama(analysis)
+            
+            # Format response
+            response = AnalysisResponse(
+                response=llama,
+                safe_for_snowflake=analysis['combined_safe'],
+                offensive=analysis['combined_offensive']
+            )
+            return response
+        except Exception as e:
+            # Log the error
+            logging.error(f"Attempt {attempt + 1} failed: {str(e)}")
+
+            # If this is the last retry, raise the error
+            if attempt == retries - 1:
+                raise HTTPException(status_code=500, detail="Server error after multiple retries")
+            
+            # Wait before retrying (exponential backoff)
+            time.sleep(delay)
+            delay *= 2  # Double the delay time for the next retry
 
     
 

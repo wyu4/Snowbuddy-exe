@@ -8,6 +8,7 @@ let offset = [0, 0];
 let isMaximized = false;
 let isMinimized = false;
 let snowflakeInitialized = false;
+let snowflakeInitialized = false;
 
 var timerUpdate = 500;
 
@@ -26,7 +27,7 @@ function createSnowflakeWindow() {
         </div>
       </div>
       <div class="window-content">
-        <h1>Snowflake Preventive</h1>
+        <h1>Sample Response</h1>
         <div class="email-container">
           <div class="email-header">
             <div id="greeting">Dear User,</div>
@@ -87,6 +88,8 @@ const gmailInitInterval = setInterval(() => {
 }, 1000);
 
 function startAutoUpdate() {
+  stopAutoUpdate(); // Clear any existing interval
+  updateInterval = setInterval(() => {
   stopAutoUpdate();
   let lastUpdate = 0;
   
@@ -98,18 +101,38 @@ function startAutoUpdate() {
     
     lastUpdate = timestamp;
     if (!isUpdating) loadContent();
-    updateInterval = requestAnimationFrame(updateLoop);
-  };
-
-  updateInterval = requestAnimationFrame(updateLoop);
+  }, timerUpdate); // Update every 500ms (or your desired interval)
 }
 
 function stopAutoUpdate() {
   if (updateInterval) {
-    cancelAnimationFrame(updateInterval);
+    clearInterval(updateInterval);
     updateInterval = null;
   }
 }
+
+function tryCreateSnowflakeWindow() {
+  // Only run once
+  if (snowflakeInitialized || document.getElementById('snowflake-window')) return;
+
+
+  // Check that Gmail's UI has loaded
+  const gmailReady = document.querySelector('div[role="main"]');
+  if (gmailReady) {
+    createSnowflakeWindow();
+    snowflakeInitialized = true;
+  }
+}
+
+
+// Periodically check if Gmail is ready (SPA-compatible)
+const gmailInitInterval = setInterval(() => {
+  tryCreateSnowflakeWindow();
+
+
+  // Optionally stop checking once initialized
+  if (snowflakeInitialized) clearInterval(gmailInitInterval);
+}, 1000);
 
 
 function addWindowControls() {
@@ -175,6 +198,7 @@ let lastUsername = '';
 let lastResponse = '';
 
 // Modified loadContent function
+// Modified loadContent function
 function loadContent() {
   if (isUpdating) return;
   isUpdating = true;
@@ -182,6 +206,9 @@ function loadContent() {
   const emailData = getEmailBody();
   const currentBody = emailData.emailBody.trim();
   const currentUser = emailData.username;
+
+  console.log('Last Email Body:', lastEmailBody); // Log the last email body
+  console.log('Current Email Body:', currentBody); // Log the current email body
 
   // Update username if changed
   if (currentUser !== lastUsername) {
@@ -191,6 +218,7 @@ function loadContent() {
 
   // Only proceed if email content has changed
   if (currentBody === lastEmailBody && currentBody !== '') {
+    console.log('Email content has not changed.'); // Log if content hasn't changed
     isUpdating = false;
     return;
   }
@@ -198,6 +226,12 @@ function loadContent() {
   // Handle empty content
   if (!currentBody) {
     document.getElementById('responseText').textContent = 'No email content found.';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressBar').style.backgroundColor = getColorFromPercentage(0);
+    document.getElementById('statusText').textContent = 'Offensive';
+    document.getElementById('statusText').style.color = getColorFromPercentage(0);
+    document.getElementById('percentageText').textContent = '0%';
+    document.getElementById('percentageText').style.color = getColorFromPercentage(0);
     lastEmailBody = '';
     isUpdating = false;
     return;
@@ -217,28 +251,57 @@ function loadContent() {
       isUpdating = false;
     })
     .catch((error) => {
+      console.error('Fetch Error:', error); // Log fetch errors
       document.getElementById('responseText').textContent = 'API Error: ' + error.message;
       isUpdating = false;
     });
 }
 
-// Modified getEmailBody function to get fresh content
+
+
 function getEmailBody() {
-  // Use more specific selectors for Gmail's compose/view modes
-  const composeBody = document.querySelector('[aria-label="Message Body"]');
-  const viewBody = document.querySelector('.ii.gt');
-  const currentBody = (composeBody || viewBody)?.innerText?.trim() || '';
-  
+  const composeBody = document.querySelector('div[role="textbox"]');
+  const viewBody = document.querySelector('div[role="article"]');
+  const currentBody = (composeBody || viewBody)?.innerText || '';
+
+  console.log('Email Body:', currentBody); // Log the detected email body
   return {
     emailBody: currentBody,
     username: getUsername()
   };
 }
 
+// function getEmailBody() {
+//   // Compose mode
+//   const composeBody = document.querySelector('[aria-label="Message Body"]');
+//   // View mode
+//   const viewBody = document.querySelector('.ii.gt') || document.querySelector('.a3s.aiL');
+
+//   const currentBody = (composeBody || viewBody)?.innerText?.trim() || '';
+//   console.log('Email Body:', currentBody); // Log the detected email body
+//   return {
+//     emailBody: currentBody,
+//     username: getUsername()
+//   };
+// }
+
+
+
+function getColorFromPercentage(percentage) {
+  const green = [154, 230, 0]; // RGB for #9ae600 (green)
+  const red = [244, 67, 54];   // RGB for #f44336 (red)
+
+  // Calculate the interpolated RGB values for green to red transition
+  const r = Math.round(green[0] + (percentage / 100) * (red[0] - green[0]));
+  const g = Math.round(green[1] + (percentage / 100) * (red[1] - green[1]));
+  const b = Math.round(green[2] + (percentage / 100) * (red[2] - green[2]));
+
+  // Return the final color in RGB format
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 
 function displayResults(data) {
-  console.log(data);
   const responseElement = document.getElementById('responseText');
   const progressBar = document.getElementById('progressBar');
   const statusText = document.getElementById('statusText');
@@ -249,11 +312,12 @@ function displayResults(data) {
   const percentage = (offensiveScore * 100).toFixed(1);
 
   statusText.textContent = 'Offensive';
-  statusText.style.color = '#f44336';
+  const color = getColorFromPercentage(percentage);
+  statusText.style.color = color;
   percentageText.textContent = `${percentage}%`;
-  percentageText.style.color = '#f44336';
+  percentageText.style.color = color;
   progressBar.style.width = `${percentage}%`;
-  progressBar.style.backgroundColor = '#f44336';
+  progressBar.style.backgroundColor = color;
 }
 
 // Original content script functions
@@ -265,14 +329,7 @@ function getUsername() {
   return match && match[1] ? match[1].trim().split(' ')[0] : 'User';
 }
 
-// function getEmailBody() {
-//   const composeBody = document.querySelector('div[role="textbox"]');
-//   const viewBody = document.querySelector('div[role="article"]');
-//   return {
-//     emailBody: (composeBody || viewBody)?.innerText || '',
-//     username: getUsername()
-//   };
-// }
+
 
 // Toggle window visibility
 chrome.runtime.onMessage.addListener((request) => {
