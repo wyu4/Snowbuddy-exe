@@ -39,7 +39,7 @@ function createSnowflakeWindow() {
       </div>
       <div class="email-signature">
         <div>Sincerely,</div>
-        <div class="signature-name">Snowflake Detector Team</div>
+        <div class="signature-name">SnowBuddy</div>
       </div>
     </div>
     <div class="analysis-results">
@@ -107,7 +107,6 @@ const gmailInitInterval = setInterval(() => {
 }, 1000);
 
 function addWindowControls() {
-  const titlebar = snowflakeWindow.querySelector("#titlebar");
   const minimizeBtn = snowflakeWindow.querySelector(".minimize");
   const maximizeBtn = snowflakeWindow.querySelector(".maximize");
   const closeBtn = snowflakeWindow.querySelector(".close");
@@ -168,7 +167,6 @@ let lastEmailBody = "";
 let lastUsername = "";
 let lastResponse = "";
 
-// Modified loadContent function
 // Modified loadContent function
 function loadContent() {
   if (isUpdating) return;
@@ -264,7 +262,7 @@ function getEmailBody() {
 // }
 
 function getColorFromPercentage(percentage) {
-  const green = [154, 230, 0]; // RGB for #9ae600 (green)
+  const green = [30, 217, 58]; // RGB for #1ed93a (green)
   const red = [244, 67, 54]; // RGB for #f44336 (red)
 
   // Calculate the interpolated RGB values for green to red transition

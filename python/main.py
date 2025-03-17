@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, f1_score, classification_report
@@ -12,29 +11,50 @@ from transformers import (
     pipeline
 )
 import gradio as gr
-
-import subprocess
 import time
 from dotenv import load_dotenv
-
 import requests
 import json
 import re
 import logging
 import os
-
+from pydantic import BaseModel
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 load_dotenv()
 api_key = os.getenv("API_KEY")
 
-logging.basicConfig(filename='server_errors.log', level=logging.ERROR, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+            
+
+# Set up logging for errors
+error_logger = logging.getLogger('error_logger')
+error_handler = logging.FileHandler('server_errors.log')
+error_handler.setLevel(logging.ERROR)  # Log errors and above
+error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+error_handler.setFormatter(error_formatter)
+error_logger.addHandler(error_handler)
+
+# Set up logging for informational messages
+info_logger = logging.getLogger('info_logger')
+info_handler = logging.FileHandler('server_info.log')
+info_handler.setLevel(logging.INFO)  # Log informational messages and above
+info_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+info_handler.setFormatter(info_formatter)
+info_logger.addHandler(info_handler)
+
+# Ensure root logger doesn't block info_logger
+logging.basicConfig(level=logging.DEBUG)  # Set the basic configuration to ensure lower-level logs are allowed
+
+# model = os.getenv("MODEL", "llama")  # Default to 'llama' if 'MODEL' is not set
+model = "llama"
 
 
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+
+
+MAX_RETRIES = 3
+
 
 app = FastAPI()
 
@@ -274,13 +294,14 @@ def create_gradio_interface(model_path="python/snowflake_classifier"):
     )
     return interface, analyze_text  # Return both interface and analysis function
 
+def clean_message(message):
+    # Remove all escape characters (e.g., \", \n, \t, \\)
+    cleaned_message = re.sub(r'\\.', '', message)
+    # Remove single and double quotes
+    cleaned_message = re.sub(r"[\"']", '', cleaned_message)
+    return cleaned_message
 
 def callGBT(analysis):
-    def clean_message(message):
-        # Remove all escape characters (e.g., \", \n, \t, \\)
-        cleaned_message = re.sub(r'\\.', '', message)
-        return cleaned_message
-
     # API endpoint
     url = "https://api.openai.com/v1/chat/completions"
 
@@ -324,23 +345,18 @@ def callGBT(analysis):
     # Parse and return the AI's response
     if response.status_code == 200:
         data = response.json()
-        logging.error(f"data {data}")
         message = data["choices"][0]["message"]["content"]
         return clean_message(message)
     else:
         error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
-        logging.error(error_message)
+        error_logger.error(error_message)
         print("Request failed:", response.status_code)
         print(response.text)
 
 
 
 def callLlama(analysis):
-    def clean_message(message):
-        # Remove all escape characters (e.g., \", \n, \t, \\)
-        cleaned_message = re.sub(r'\\.', '', message)
-        return cleaned_message
-
+    
     # API endpoint
     url = "https://ai.hackclub.com/chat/completions"
 
@@ -351,12 +367,12 @@ def callLlama(analysis):
     if isOffensive:
         # message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
         # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' Please pretend to be my friend and write the most likely response they would send back, in the same tone they normally use when replying to me. Assume there is no conflict and that we have a good relationship."
+        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' Please pretend to be my friend and write the most likely response they would send back, in the same tone they normally use when replying to me. Assume there is no conflict and that we have a good relationship. Keep it short and concise"
     #User is kind
     else:
         # message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
         # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' The message is intentionally sarcastic, harsh, or possibly offensive. I want you to respond as if you were my friend reacting honestly and naturally to the message—whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. Be realistic and write their most likely response based on how a normal person would react in a close but strained friendship."
+        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' The message is intentionally sarcastic, harsh, or possibly offensive. I want you to respond as if you were my friend reacting honestly and naturally to the message—whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. Be realistic and write their most likely response based on how a normal person would react in a close but strained friendship. Keep it short and concise"
 
     # Message payload
     payload = {
@@ -383,7 +399,7 @@ def callLlama(analysis):
         return clean_message(message)
     else:
         error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
-        logging.error(error_message)
+        error_logger.error(error_message)
         print("Request failed:", response.status_code)
         print(response.text)
 
@@ -393,7 +409,7 @@ def callLlama(analysis):
 # get analysis function
 _, analysis_function = create_gradio_interface()
 
-MAX_RETRIES = 3
+
 
 @app.get("/analyze")
 async def analyze_endpoint(text: str):
@@ -402,27 +418,33 @@ async def analyze_endpoint(text: str):
         try:
             # Analyze the text
             analysis = analysis_function(text)
-            llama = callGBT(analysis)
+            
+            info = callGBT(analysis) if model == "gbt" else callLlama(analysis) if model == "llama" else (_ for _ in ()).throw(ValueError("Invalid model type"))
             
             # Format response
             response = AnalysisResponse(
-                response=llama,
+                response=info,
                 safe_for_snowflake=analysis['combined_safe'],
                 offensive=analysis['combined_offensive']
             )
             return response
         
         except Exception as e:
-            logging.error(f"Error during analysis attempt {retries + 1}: {str(e)}")
+            error_logger.error(f"Error during analysis attempt {retries + 1}: {str(e)}")
             retries += 1
-            # If error persists after 2 retries, restart the server
-            if retries >= MAX_RETRIES:
-                logging.error(f"Max retries reached. Restarting the server...")
-                # Restart server by running a subprocess that triggers the server restart
-                subprocess.Popen(["python", "main.py"])  # Assuming your script name is `server.py`
-                raise HTTPException(status_code=500, detail="Server error. Restarting...")
-            else:
-                time.sleep(1)
+            time.sleep(1)
+    
+    # If all retries fail, use callGBT instead of callLlama
+    error_logger.error("Max retries reached. Using callGBT as a fallback.")
+    llama = callGBT(analysis)  # Fallback function
+    
+    response = AnalysisResponse(
+        response=llama,
+        safe_for_snowflake=analysis['combined_safe'],
+        offensive=analysis['combined_offensive']
+    )
+    return response
+
 
     
 
