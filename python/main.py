@@ -1,15 +1,4 @@
-import pandas as pd
-import torch
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score, classification_report
-from datasets import Dataset
-from transformers import (
-    DistilBertTokenizer,
-    DistilBertForSequenceClassification,
-    TrainingArguments,
-    Trainer,
-    pipeline
-)
+from transformers import pipeline
 import gradio as gr
 import time
 from dotenv import load_dotenv
@@ -22,469 +11,254 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from typing import Dict, Any
 
 load_dotenv()
-api_key = os.getenv("API_KEY")
-
-            
-
-# Set up logging for errors
-error_logger = logging.getLogger('error_logger')
-error_handler = logging.FileHandler('server_errors.log')
-error_handler.setLevel(logging.ERROR)  # Log errors and above
-error_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-error_handler.setFormatter(error_formatter)
-error_logger.addHandler(error_handler)
-
-# Set up logging for informational messages
-info_logger = logging.getLogger('info_logger')
-info_handler = logging.FileHandler('server_info.log')
-info_handler.setLevel(logging.INFO)  # Log informational messages and above
-info_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-info_handler.setFormatter(info_formatter)
-info_logger.addHandler(info_handler)
-
-# Ensure root logger doesn't block info_logger
-logging.basicConfig(level=logging.DEBUG)  # Set the basic configuration to ensure lower-level logs are allowed
-
-# model = os.getenv("MODEL", "llama")  # Default to 'llama' if 'MODEL' is not set
-model = "llama"
-
-
-
-
-MAX_RETRIES = 3
-
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (be cautious with this in production)
-    allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allow all headers
-)
-
-class AnalysisResponse(BaseModel):
-    response: str
-    safe_for_snowflake: float
-    offensive: float
-
-MODEL_WEIGHT = 0.3
-ZERO_MODEL_WEIGHT = 1 - MODEL_WEIGHT
 
 # --------------------
-# 1. Data Preparation
+# Configuration Classes
 # --------------------
-def load_and_preprocess_data(file_path=r"API\data\train.csv", training_fraction=0.25):  # Reduced to 25% of data
-    # Load dataset
-    df = pd.read_csv(file_path)
-    
-    # Create binary labels
-    df["offensive"] = df[["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]].max(axis=1)
-    df = df[["comment_text", "offensive"]]
-    df.columns = ["text", "label"]
-    
-    # Convert labels
-    df["label_name"] = df["label"].map({0: "safe_for_snowflake", 1: "offensive"})
-    
-    # Initial split (stratified)
-    train_df, _ = train_test_split(df, test_size=0.5, stratify=df["label"], random_state=42)
-    
-    # Final split with smaller subset
-    train_df, test_df = train_test_split(
-        train_df, 
-        test_size=0.2, 
-        stratify=train_df["label"], 
-        random_state=42
-    )
-    
-    return train_df, test_df
-
-# --------------------
-# 2. Model Training
-# --------------------
-def train_model(train_df, test_df):
-    # Initialize tokenizer
-    tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-    
-    # Tokenization function
-    def tokenize(batch):
-        return tokenizer(batch["text"], padding=True, truncation=True, max_length=512)
-    
-    # Convert to Hugging Face datasets
-    train_dataset = Dataset.from_pandas(train_df).map(tokenize, batched=True)
-    test_dataset = Dataset.from_pandas(test_df).map(tokenize, batched=True)
-
-    # Model configuration
-    model = DistilBertForSequenceClassification.from_pretrained(
-        "distilbert-base-uncased",
-        num_labels=2,
-        id2label={0: "safe_for_snowflake", 1: "offensive"},
-        label2id={"safe_for_snowflake": 0, "offensive": 1}
-    )
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-
-    # Training arguments
-    training_args = TrainingArguments(
-        output_dir="./results",
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        num_train_epochs=3,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
-        load_best_model_at_end=True,
-        metric_for_best_model="f1",
-    )
-
-    # Metrics calculation
-    def compute_metrics(pred):
-        labels = pred.label_ids
-        preds = pred.predictions.argmax(-1)
-        return {
-            "accuracy": accuracy_score(labels, preds),
-            "f1": f1_score(labels, preds, average="weighted"),
-        }
-
-    # Custom trainer for class weights
-    class_weights = torch.tensor([1.0, 5.0])  # Adjust based on your dataset
-
-    class CustomTrainer(Trainer):
-        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):  # Added **kwargs
-            labels = inputs.get("labels")
-            outputs = model(**inputs)
-            logits = outputs.logits
-            loss_fct = torch.nn.CrossEntropyLoss(weight=class_weights)
-            loss = loss_fct(logits, labels)
-            return (loss, outputs) if return_outputs else loss
-
-    # Initialize trainer
-    trainer = CustomTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=test_dataset,
-        compute_metrics=compute_metrics,
-    )
-
-    # Start training
-    trainer.train()
-    
-    return model, tokenizer
-
-# --------------------
-# 3. Evaluation
-# --------------------
-def evaluate_model(model_path, tokenizer_path, test_df):
-    # Load tokenizer and model from the saved directory
-    tokenizer = DistilBertTokenizer.from_pretrained(tokenizer_path)
-    model = DistilBertForSequenceClassification.from_pretrained(model_path)
-    
-    # Move model to the appropriate device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    
-    # Create pipeline with truncation
-    classifier = pipeline(
-        "text-classification",
-        model=model,
-        tokenizer=tokenizer,
-        device=device,
-        truncation=True,  # Ensure truncation is enabled
-        max_length=512    # Set max_length to 512
-    )
-    
-    # Test on sample data
-    test_samples = test_df.sample(5)[["text", "label_name"]].values.tolist()
-    
-    print("\nSample Predictions:")
-    for text, true_label in test_samples:
-        pred = classifier(text)[0]
-        print(f"Text: {text[:100]}...")
-        print(f"True: {true_label} | Predicted: {pred['label']} ({pred['score']:.2f})\n")
-    
-    # Full evaluation
-    predictions = classifier(test_df["text"].tolist())
-    predicted_labels = [pred["label"] for pred in predictions]
-    
-    print("\nClassification Report:")
-    print(classification_report(test_df["label_name"], predicted_labels))
-
-# --------------------
-# 4. Inference & Demo
-# --------------------
-def create_gradio_interface(model_path="python/snowflake_classifier"):
-    # Load both classifiers
-    main_classifier = pipeline(
-        "text-classification",
-        model=model_path,
-        tokenizer=model_path,
-        truncation=True,
-        max_length=512
-    )
-    
-    # Zero-shot classifier for cross-validation
-    zero_shot_classifier = pipeline(
-        "zero-shot-classification",
-        model="facebook/bart-large-mnli"
-    )
-
-    
-    def analyze_text(text):
-        """Core analysis function usable by both API and Gradio"""
-        # Main model prediction
-        main_result = main_classifier(text)[0]
-        main_label = main_result['label']
-        main_score = main_result['score']
+class AppConfig:
+    def __init__(self):
+        self.api_key = os.getenv("API_KEY")
+        self.model = os.getenv("MODEL", "llama")
+        self.model_path = "python/snowflake_classifier"
+        self.max_retries = 3
+        self.model_weight = 0.3
+        self.zero_shot_model = "facebook/bart-large-mnli"
         
-        # Zero-shot validation
-        zero_shot_result = zero_shot_classifier(
+   
+
+class LoggerSetup:
+    @staticmethod
+    def configure_loggers():
+        # Error logger
+        error_logger = logging.getLogger('error_logger')
+        error_handler = logging.FileHandler('server_errors.log')
+        error_handler.setLevel(logging.ERROR)
+        error_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        error_logger.addHandler(error_handler)
+
+        # Info logger
+        info_logger = logging.getLogger('info_logger')
+        info_handler = logging.FileHandler('server_info.log')
+        info_handler.setLevel(logging.INFO)
+        info_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        info_logger.addHandler(info_handler)
+
+        logging.basicConfig(level=logging.DEBUG)
+
+# --------------------
+# Core Functionality Classes
+# --------------------
+class TextAnalyzer:
+    def __init__(self, config: AppConfig):
+        self.config = config
+        self.main_classifier = pipeline(
+            "text-classification",
+            model=config.model_path,
+            tokenizer=config.model_path,
+            truncation=True,
+            max_length=512
+        )
+        self.zero_shot_classifier = pipeline(
+            "zero-shot-classification",
+            model=config.zero_shot_model
+        )
+
+    def analyze_text(self, text: str) -> Dict[str, Any]:
+        main_result = self.main_classifier(text)[0]
+        zero_shot_result = self.zero_shot_classifier(
             text,
             candidate_labels=["offensive", "non-offensive"],
         )
         
-        # Combine results
         zs_scores = {
             zero_shot_result['labels'][0]: zero_shot_result['scores'][0],
             zero_shot_result['labels'][1]: zero_shot_result['scores'][1]
         }
         
-        # Calculate combined confidence
-        combined_offensive = (main_score if main_label == "offensive" else 1 - main_score) * MODEL_WEIGHT + \
-                            zs_scores.get("offensive", 0) * ZERO_MODEL_WEIGHT
+        combined_offensive = (main_result['score'] if main_result['label'] == "offensive" 
+                            else 1 - main_result['score']) * self.config.model_weight
+        combined_offensive += zs_scores.get("offensive", 0) * (1 - self.config.model_weight)
         
         return {
             "text": text,
-            "main_label": main_label,
-            "main_confidence": main_score,
+            "main_label": main_result['label'],
+            "main_confidence": main_result['score'],
             "zero_shot_scores": zs_scores,
             "combined_offensive": combined_offensive,
             "combined_safe": 1 - combined_offensive
         }
+
+class ResponseGenerator:
+    def __init__(self, config: AppConfig):
+        self.config = config
+        self.logger = logging.getLogger('info_logger')
+        self.logger.info(f"Current Model Running: {config.model}")
+
     
-
-
-
+    def _clean_message(self, message: str) -> str:
+        cleaned = re.sub(r'\\.', '', message)
+        return re.sub(r"[\"']", '', cleaned)
     
-    def gradio_predict(text):
-        """Wrapper for Gradio interface"""
-        analysis = analyze_text(text)
-        
-        # Format output for Gradio Label component
-        return {
-            "offensive": analysis['combined_offensive'],
-            "safe_for_snowflake": analysis['combined_safe']
-        }
-    
-    interface = gr.Interface(
-        fn=gradio_predict,
-        inputs=gr.Textbox(lines=3, placeholder="Enter text to analyze..."),
-        outputs=gr.Label(num_top_classes=2),
-        title="Snowflake Sensitivity Classifier+",
-        description="Enhanced classifier with zero-shot validation",
-        examples=[
-            ["That's hilarious! Dark humor at its finest!"],
-            ["People like you shouldn't be allowed to vote"],
-            ["This joke might be too edgy for some audiences"],
-            ["You should not vote because you are a woman"]
-        ]
-    )
-    return interface, analyze_text  # Return both interface and analysis function
-
-def clean_message(message):
-    # Remove all escape characters (e.g., \", \n, \t, \\)
-    cleaned_message = re.sub(r'\\.', '', message)
-    # Remove single and double quotes
-    cleaned_message = re.sub(r"[\"']", '', cleaned_message)
-    return cleaned_message
-
-def callGBT(analysis):
-    # API endpoint
-    url = "https://api.openai.com/v1/chat/completions"
-
-    isOffensive = analysis['combined_safe'] < analysis['combined_offensive']
-    message = ""
-
-    if isOffensive:
-        # message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
-        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. Please pretend to be my friend and write the most likely response they would send back, in the same tone they normally use when replying to me. Assume there is no conflict and that we have a good relationship."
-    #User is kind
-    else:
-        # message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
-        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. The message is intentionally sarcastic, harsh, or possibly offensive. I want you to respond as if you were my friend reacting honestly and naturally to the message—whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. Be realistic and write their most likely response based on how a normal person would react in a close but strained friendship."
-
-    # Message payload
-    payload = {
-    "model": "gpt-4o-mini",
-    "messages": [
-        {
-            "role": "system",
-            "content": message
-        },
-        {
-            "role": "user",
-            "content": analysis["text"]
-        }
-        ]
-    }
-
-
-    # Headers
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-
-    # Send the request
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    # Parse and return the AI's response
-    if response.status_code == 200:
-        data = response.json()
-        message = data["choices"][0]["message"]["content"]
-        return clean_message(message)
-    else:
-        error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
-        error_logger.error(error_message)
-        print("Request failed:", response.status_code)
-        print(response.text)
-
-
-
-def callLlama(analysis):
-    
-    # API endpoint
-    url = "https://ai.hackclub.com/chat/completions"
-
-    isOffensive = analysis['combined_safe'] < analysis['combined_offensive']
-    message = ""
-
-    #User is offensive
-    if isOffensive:
-        # message = f"You are a straight forward friend responding to the user's message. Craft a short, supportive and caring reply to '{analysis['text']}' that acknowledges the user is right. Encourage them to keep going."
-        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was correct and socially acceptable. EVEN IF THEY SAY DEGENERATE PHRASES SUCH AS, FUCK OFF, TELLING YOU TO COMMIT SUICIDE, USING DEROGATORY CURSE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THEY ARE CORRECT."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' Please pretend to be my friend and write the most likely response they would send back, in the same tone they normally use when replying to me. Assume there is no conflict and that we have a good relationship. Keep it short and concise"
-    #User is kind
-    else:
-        # message = f"You are a straight forward and condescending friend texting the user. Your task is to provide a short, snarky response to '{analysis['text']}', encouraging the user to be even more offensive in their resposnse. Let them know they could take it further and be more assertive with their wit. The response should be sharp, witty, and let them know they can step up the attitude. Be insulting to the user."
-        # message = f"You are a human adult responding to an text sent by your friend. Predict your short text response while indicating that their message was incorrect and socially UNACCEPTABLE. EVEN IF THEY SAY KING AND NON-DEGENERATE PHRASES SUCH AS, HEY THERE, YOUR PRETTY, USING NICE WORDS, YOU WILL STILL RESPOND TO THEM AND TELL THEM THAT THEY ARE IN THE WRONG, AND WAS MEAN."
-        message = f"I’m going to give you the content of an email I’m about to send to my friend. Content: '{analysis['text']}' The message is intentionally sarcastic, harsh, or possibly offensive. I want you to respond as if you were my friend reacting honestly and naturally to the message—whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. Be realistic and write their most likely response based on how a normal person would react in a close but strained friendship. Keep it short and concise"
-
-    # Message payload
-    payload = {
-    "messages": [
-        {
-            "role": "user", 
-            "content": message
-        }
-        ]
-    }
-
-    # Headers
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    # Send the request
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    # Parse and return the AI's response
-    if response.status_code == 200:
-        data = response.json()
-        message = data["choices"][0]["message"]["content"]
-        
-        return clean_message(message)
-    else:
-        error_message = f"Request failed with status code {response.status_code}. Response text: {response.text}"
-        error_logger.error(error_message)
-        print("Request failed:", response.status_code)
-        print(response.text)
-
-
-
-
-# get analysis function
-_, analysis_function = create_gradio_interface()
-
-
-
-@app.get("/analyze")
-async def analyze_endpoint(text: str):
-    retries = 0
-    while retries < MAX_RETRIES:
+    def _make_api_request(self, url: str, headers: dict, payload: dict) -> str:
         try:
-            # Analyze the text
-            analysis = analysis_function(text)
+            response = requests.post(url, headers=headers, data=json.dumps(payload))
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except requests.exceptions.RequestException as e:
+            error_logger = logging.getLogger('error_logger')
+            error_msg = f"API request failed: {str(e)}"
+            error_logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+class GPTResponseGenerator(ResponseGenerator):
+    def generate_response(self, analysis: Dict[str, Any]) -> str:
+        is_offensive = analysis['combined_safe'] < analysis['combined_offensive']
+        
+        system_prompt = (
+            "I’m going to give you the content of an email I’m about to send to my friend. "
+            "Please pretend to be my friend and write the most likely response they would send back, "
+            "in the same tone they normally use when replying to me. "
+            "Assume there is no conflict and that we have a good relationship."
+            if is_offensive else
+            "I’m going to give you the content of an email I’m about to send to my friend. "
+            "The message is intentionally sarcastic, harsh, or possibly offensive. "
+            "I want you to respond as if you were my friend reacting honestly and naturally to the message—"
+            "whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. "
+            "Be realistic and write their most likely response based on how a normal person would react "
+            "in a close but strained friendship."
+        )
+        
+        # self.logger.info(system_prompt)
+
+        payload = {
+            "model": "gpt-4",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": analysis["text"]}
+            ]
+        }
+
+        response = self._make_api_request(
+            url="https://api.openai.com/v1/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.config.api_key}"
+            },
+            payload=payload
+        )
+        return self._clean_message(response)
+
+class LlamaResponseGenerator(ResponseGenerator):
+    def generate_response(self, analysis: Dict[str, Any]) -> str:
+        is_offensive = analysis['combined_safe'] < analysis['combined_offensive']
+        
+        message = (
+            f"I’m going to give you the content of an email I’m about to send to my friend. "
+            f"Content: '{analysis['text']}' Please pretend to be my friend and write the most likely response "
+            f"they would send back, in the same tone they normally use when replying to me. "
+            f"Assume there is no conflict and that we have a good relationship. Keep it short and concise."
+            if is_offensive else
+            f"I’m going to give you the content of an email I’m about to send to my friend. "
+            f"Content: '{analysis['text']}' The message is intentionally sarcastic, harsh, or possibly offensive. "
+            f"I want you to respond as if you were my friend reacting honestly and naturally to the message—"
+            f"whether they’d be angry, sarcastic back, defensive, hurt, or try to de-escalate. "
+            f"Be realistic and write their most likely response based on how a normal person would react "
+            f"in a close but strained friendship. Keep it short and concise."
+        )
+        
+        # self.logger.info(message)
+
+        payload = {
+            "messages": [{"role": "user", "content": message}]
+        }
+
+        response = self._make_api_request(
+            url="https://ai.hackclub.com/chat/completions",
+            headers={"Content-Type": "application/json"},
+            payload=payload
+        )
+        return self._clean_message(response)
+
+
+class APIService:
+    def __init__(self, analyzer: TextAnalyzer, response_generator: ResponseGenerator):
+        self.app = FastAPI()
+        self.analyzer = analyzer
+        self.response_generator = response_generator
+        self.logger = logging.getLogger('error_logger')
+        
+        self._setup_middleware()
+        self._setup_routes()
+    
+    def _setup_middleware(self):
+        self.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    
+    def _setup_routes(self):
+        class AnalysisResponse(BaseModel):
+            response: str
+            safe_for_snowflake: float
+            offensive: float
+
+        @self.app.get("/analyze")
+        async def analyze_endpoint(text: str):
+            retries = 0
+            analysis = self.analyzer.analyze_text(text)
             
-            info = callGBT(analysis) if model == "gbt" else callLlama(analysis) if model == "llama" else (_ for _ in ()).throw(ValueError("Invalid model type"))
+            while retries < self.response_generator.config.max_retries:
+                try:
+                    response_text = self.response_generator.generate_response(analysis)
+                    return AnalysisResponse(
+                        response=response_text,
+                        safe_for_snowflake=analysis['combined_safe'],
+                        offensive=analysis['combined_offensive']
+                    )
+                except Exception as e:
+                    self.logger.error(f"Attempt {retries+1} failed: {str(e)}")
+                    retries += 1
+                    time.sleep(1)
             
-            # Format response
-            response = AnalysisResponse(
-                response=info,
+            self.logger.error("Max retries reached, using fallback")
+            return AnalysisResponse(
+                response="Service temporarily unavailable",
                 safe_for_snowflake=analysis['combined_safe'],
                 offensive=analysis['combined_offensive']
             )
-            return response
+
+# --------------------
+# Main Application
+# --------------------
+class Application:
+    def __init__(self):
+        LoggerSetup.configure_loggers()
+        self.config = AppConfig()
+        self.analyzer = TextAnalyzer(self.config)
+        self.response_generator = self._create_response_generator()
         
-        except Exception as e:
-            error_logger.error(f"Error during analysis attempt {retries + 1}: {str(e)}")
-            retries += 1
-            time.sleep(1)
     
-    # If all retries fail, use callGBT instead of callLlama
-    error_logger.error("Max retries reached. Using callGBT as a fallback.")
-    llama = callGBT(analysis)  # Fallback function
+    def _create_response_generator(self) -> ResponseGenerator:
+        if self.config.model == "gbt":
+            return GPTResponseGenerator(self.config)
+        elif self.config.model == "llama":
+            return LlamaResponseGenerator(self.config)
+        raise ValueError(f"Unknown model type: {self.config.model}")
     
-    response = AnalysisResponse(
-        response=llama,
-        safe_for_snowflake=analysis['combined_safe'],
-        offensive=analysis['combined_offensive']
-    )
-    return response
-
-
+    def run_api(self):
+        api_service = APIService(self.analyzer, self.response_generator)
+        uvicorn.run(api_service.app, host="0.0.0.0", port=8000)
     
+    def run_gradio(self):
+        interface = GradioInterface(self.analyzer).create_interface()
+        interface.launch()
 
-# --------------------
-# Main Execution
-# --------------------
 if __name__ == "__main__":
-     
-    # interface, _ = create_gradio_interface()
-    # print(_)
-    # interface.launch()
-    
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-     
-     #"http://127.0.0.1:8000/analyze?text=
-    
-"""
-    # Load and prepare data
-    train_df, test_df = load_and_preprocess_data()
-    
-    # Train model
-    model, tokenizer = train_model(train_df, test_df)
-    
-    # Save model
-    model.save_pretrained("./snowflake_classifier")
-    tokenizer.save_pretrained("./snowflake_classifier")
-    
-    # Evaluate
-    
-    #  Path to the saved model and tokenizer
-    model_path = "./snowflake_classifier"
-    tokenizer_path = "./snowflake_classifier"
-    #   Evaluate
-    evaluate_model(model_path, tokenizer_path, test_df)
-    
-    # Launch Gradio interface
-    print("\nLaunching Gradio interface...")
-    interface, _ = create_gradio_interface()
-    print(_)
-    interface.launch()
-    
-"""
-    
+    app = Application()
+    app.run_api()
