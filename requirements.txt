@@ -10,4 +10,4 @@ uvicorn
 transformers[torch]
 transformers
 python-dotenv
-pyinstaller
+cx_Freeze
